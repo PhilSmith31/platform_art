@@ -30,15 +30,9 @@ include art/build/Android.common_utils.mk
 # Beware that tests may use the non-debug build for performance, notable 055-enum-performance
 #
 ART_BUILD_TARGET_NDEBUG ?= true
-ART_BUILD_HOST_NDEBUG ?= true
-
-ifneq ($(USE_DEX2OAT_DEBUG),false)
 ART_BUILD_TARGET_DEBUG ?= true
+ART_BUILD_HOST_NDEBUG ?= true
 ART_BUILD_HOST_DEBUG ?= true
-else
-ART_BUILD_TARGET_DEBUG ?= false
-ART_BUILD_HOST_DEBUG ?= false
-endif
 
 # Set this to change what opt level Art is built at.
 ART_DEBUG_OPT_FLAG ?= -O2
@@ -338,7 +332,7 @@ art_non_debug_cflags := \
 
 # Cflags for debug ART and ART tools.
 art_debug_cflags := \
-  $(ART_NDEBUG_OPT_FLAG) \
+  $(ART_DEBUG_OPT_FLAG) \
   -DDYNAMIC_ANNOTATIONS_ENABLED=1 \
   -UNDEBUG
 

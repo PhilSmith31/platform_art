@@ -177,9 +177,8 @@ void SsaLivenessAnalysis::ComputeLiveness() {
 static void RecursivelyProcessInputs(HInstruction* current,
                                      HInstruction* actual_user,
                                      BitVector* live_in) {
-  auto&& inputs = current->GetInputs();
-  for (size_t i = 0; i < inputs.size(); ++i) {
-    HInstruction* input = inputs[i];
+  for (size_t i = 0, e = current->InputCount(); i < e; ++i) {
+    HInstruction* input = current->InputAt(i);
     bool has_in_location = current->GetLocations()->InAt(i).IsValid();
     bool has_out_location = input->GetLocations()->Out().IsValid();
 
@@ -431,12 +430,12 @@ int LiveInterval::FindFirstRegisterHint(size_t* free_until,
         // If the instruction dies at the phi assignment, we can try having the
         // same register.
         if (end == user->GetBlock()->GetPredecessors()[input_index]->GetLifetimeEnd()) {
-          auto&& inputs = user->GetInputs();
-          for (size_t i = 0; i < inputs.size(); ++i) {
+          for (size_t i = 0, e = user->InputCount(); i < e; ++i) {
             if (i == input_index) {
               continue;
             }
-            Location location = inputs[i]->GetLiveInterval()->GetLocationAt(
+            HInstruction* input = user->InputAt(i);
+            Location location = input->GetLiveInterval()->GetLocationAt(
                 user->GetBlock()->GetPredecessors()[i]->GetLifetimeEnd() - 1);
             if (location.IsRegisterKind()) {
               int reg = RegisterOrLowRegister(location);
@@ -472,10 +471,10 @@ int LiveInterval::FindHintAtDefinition() const {
   if (defined_by_->IsPhi()) {
     // Try to use the same register as one of the inputs.
     const ArenaVector<HBasicBlock*>& predecessors = defined_by_->GetBlock()->GetPredecessors();
-    auto&& inputs = defined_by_->GetInputs();
-    for (size_t i = 0; i < inputs.size(); ++i) {
+    for (size_t i = 0, e = defined_by_->InputCount(); i < e; ++i) {
+      HInstruction* input = defined_by_->InputAt(i);
       size_t end = predecessors[i]->GetLifetimeEnd();
-      LiveInterval* input_interval = inputs[i]->GetLiveInterval()->GetSiblingAt(end - 1);
+      LiveInterval* input_interval = input->GetLiveInterval()->GetSiblingAt(end - 1);
       if (input_interval->GetEnd() == end) {
         // If the input dies at the end of the predecessor, we know its register can
         // be reused.

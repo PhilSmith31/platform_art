@@ -1426,7 +1426,7 @@ void LocationsBuilderMIPS64::VisitArrayLength(HArrayLength* instruction) {
 
 void InstructionCodeGeneratorMIPS64::VisitArrayLength(HArrayLength* instruction) {
   LocationSummary* locations = instruction->GetLocations();
-  uint32_t offset = CodeGenerator::GetArrayLengthOffset(instruction);
+  uint32_t offset = mirror::Array::LengthOffset().Uint32Value();
   GpuRegister obj = locations->InAt(0).AsRegister<GpuRegister>();
   GpuRegister out = locations->Out().AsRegister<GpuRegister>();
   __ LoadFromOffset(kLoadWord, out, obj, offset);
@@ -3594,7 +3594,7 @@ void InstructionCodeGeneratorMIPS64::VisitCurrentMethod(HCurrentMethod* instruct
 
 void LocationsBuilderMIPS64::VisitPhi(HPhi* instruction) {
   LocationSummary* locations = new (GetGraph()->GetArena()) LocationSummary(instruction);
-  for (size_t i = 0, e = locations->GetInputCount(); i < e; ++i) {
+  for (size_t i = 0, e = instruction->InputCount(); i < e; ++i) {
     locations->SetInAt(i, Location::Any());
   }
   locations->SetOut(Location::Any());

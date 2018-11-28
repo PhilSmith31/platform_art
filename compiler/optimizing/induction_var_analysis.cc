@@ -152,8 +152,8 @@ void HInductionVarAnalysis::VisitNode(HLoopInformation* loop, HInstruction* inst
 
   // Visit all descendants.
   uint32_t low = d1;
-  for (HInstruction* input : instruction->GetInputs()) {
-    low = std::min(low, VisitDescendant(loop, input));
+  for (size_t i = 0, count = instruction->InputCount(); i < count; ++i) {
+    low = std::min(low, VisitDescendant(loop, instruction->InputAt(i)));
   }
 
   // Lower or found SCC?
@@ -341,11 +341,11 @@ HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::TransferPhi(HLoopIn
                                                                          HInstruction* phi,
                                                                          size_t input_index) {
   // Match all phi inputs from input_index onwards exactly.
-  auto&& inputs = phi->GetInputs();
-  DCHECK_LT(input_index, inputs.size());
-  InductionInfo* a = LookupInfo(loop, inputs[input_index]);
-  for (size_t i = input_index + 1; i < inputs.size(); i++) {
-    InductionInfo* b = LookupInfo(loop, inputs[i]);
+  const size_t count = phi->InputCount();
+  DCHECK_LT(input_index, count);
+  InductionInfo* a = LookupInfo(loop, phi->InputAt(input_index));
+  for (size_t i = input_index + 1; i < count; i++) {
+    InductionInfo* b = LookupInfo(loop, phi->InputAt(i));
     if (!InductionEqual(a, b)) {
       return nullptr;
     }
@@ -464,12 +464,12 @@ HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::TransferCnv(Inducti
 HInductionVarAnalysis::InductionInfo* HInductionVarAnalysis::SolvePhi(HInstruction* phi,
                                                                       size_t input_index) {
   // Match all phi inputs from input_index onwards exactly.
-  auto&& inputs = phi->GetInputs();
-  DCHECK_LT(input_index, inputs.size());
-  auto ita = cycle_.find(inputs[input_index]);
+  const size_t count = phi->InputCount();
+  DCHECK_LT(input_index, count);
+  auto ita = cycle_.find(phi->InputAt(input_index));
   if (ita != cycle_.end()) {
-    for (size_t i = input_index + 1; i < inputs.size(); i++) {
-      auto itb = cycle_.find(inputs[i]);
+    for (size_t i = input_index + 1; i < count; i++) {
+      auto itb = cycle_.find(phi->InputAt(i));
       if (itb == cycle_.end() ||
           !HInductionVarAnalysis::InductionEqual(ita->second, itb->second)) {
         return nullptr;

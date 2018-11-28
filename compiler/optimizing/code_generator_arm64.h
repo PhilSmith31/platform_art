@@ -417,10 +417,6 @@ class CodeGeneratorARM64 : public CodeGenerator {
     block_labels_.resize(GetGraph()->GetBlocks().size());
   }
 
-  // We want to use the STP and LDP instructions to spill and restore registers for slow paths.
-  // These instructions can only encode offsets that are multiples of the register size accessed.
-  uint32_t GetPreferredSlotsAlignment() const OVERRIDE { return vixl::kXRegSizeInBytes; }
-
   JumpTableARM64* CreateJumpTable(HPackedSwitch* switch_instr) {
     jump_tables_.emplace_back(new (GetGraph()->GetArena()) JumpTableARM64(switch_instr));
     return jump_tables_.back().get();
@@ -519,17 +515,6 @@ class CodeGeneratorARM64 : public CodeGenerator {
                                              Location index,
                                              vixl::Register temp,
                                              bool needs_null_check);
-  // Factored implementation used by GenerateFieldLoadWithBakerReadBarrier
-  // and GenerateArrayLoadWithBakerReadBarrier.
-  void GenerateReferenceLoadWithBakerReadBarrier(HInstruction* instruction,
-                                                 Location ref,
-                                                 vixl::Register obj,
-                                                 uint32_t offset,
-                                                 Location index,
-                                                 size_t scale_factor,
-                                                 vixl::Register temp,
-                                                 bool needs_null_check,
-                                                 bool use_load_acquire);
 
   // Generate a read barrier for a heap reference within `instruction`
   // using a slow path.
@@ -585,6 +570,17 @@ class CodeGeneratorARM64 : public CodeGenerator {
   void GenerateExplicitNullCheck(HNullCheck* instruction);
 
  private:
+  // Factored implementation of GenerateFieldLoadWithBakerReadBarrier
+  // and GenerateArrayLoadWithBakerReadBarrier.
+  void GenerateReferenceLoadWithBakerReadBarrier(HInstruction* instruction,
+                                                 Location ref,
+                                                 vixl::Register obj,
+                                                 uint32_t offset,
+                                                 Location index,
+                                                 vixl::Register temp,
+                                                 bool needs_null_check,
+                                                 bool use_load_acquire);
+
   using Uint64ToLiteralMap = ArenaSafeMap<uint64_t, vixl::Literal<uint64_t>*>;
   using Uint32ToLiteralMap = ArenaSafeMap<uint32_t, vixl::Literal<uint32_t>*>;
   using MethodToLiteralMap = ArenaSafeMap<MethodReference,

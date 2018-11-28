@@ -50,7 +50,6 @@
 #include "mirror/array-inl.h"
 #include "mirror/object_array-inl.h"
 #include "mirror/object_reference.h"
-#include "mirror/string.h"
 #include "parallel_move_resolver.h"
 #include "ssa_liveness_analysis.h"
 #include "utils/assembler.h"
@@ -111,10 +110,10 @@ static bool CheckTypeConsistency(HInstruction* instruction) {
         << " " << locations->Out();
   }
 
-  auto&& inputs = instruction->GetInputs();
-  for (size_t i = 0; i < inputs.size(); ++i) {
-    DCHECK(CheckType(inputs[i]->GetType(), locations->InAt(i)))
-      << inputs[i]->GetType() << " " << locations->InAt(i);
+  for (size_t i = 0, e = instruction->InputCount(); i < e; ++i) {
+    DCHECK(CheckType(instruction->InputAt(i)->GetType(), locations->InAt(i)))
+      << instruction->InputAt(i)->GetType()
+      << " " << locations->InAt(i);
   }
 
   HEnvironment* environment = instruction->GetEnvironment();
@@ -138,12 +137,6 @@ size_t CodeGenerator::GetCacheOffset(uint32_t index) {
 size_t CodeGenerator::GetCachePointerOffset(uint32_t index) {
   auto pointer_size = InstructionSetPointerSize(GetInstructionSet());
   return pointer_size * index;
-}
-
-uint32_t CodeGenerator::GetArrayLengthOffset(HArrayLength* array_length) {
-  return array_length->IsStringLength()
-      ? mirror::String::CountOffset().Uint32Value()
-      : mirror::Array::LengthOffset().Uint32Value();
 }
 
 bool CodeGenerator::GoesToNextBlock(HBasicBlock* current, HBasicBlock* next) const {
@@ -284,8 +277,7 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
   DCHECK(!block_order.empty());
   DCHECK(block_order[0] == GetGraph()->GetEntryBlock());
   ComputeSpillMask();
-  first_register_slot_in_slow_path_ = RoundUp(
-      (number_of_out_slots + number_of_spill_slots) * kVRegSize, GetPreferredSlotsAlignment());
+  first_register_slot_in_slow_path_ = (number_of_out_slots + number_of_spill_slots) * kVRegSize;
 
   if (number_of_spill_slots == 0
       && !HasAllocatedCalleeSaveRegisters()
@@ -295,17 +287,9 @@ void CodeGenerator::InitializeCodeGeneration(size_t number_of_spill_slots,
     DCHECK_EQ(maximum_number_of_live_fpu_registers, 0u);
     SetFrameSize(CallPushesPC() ? GetWordSize() : 0);
   } else {
-#ifdef ART_ENABLE_CODEGEN_arm64
-    if (GetInstructionSet() == kArm64) {
-      // Adjust the offset to which we spill and restore registers for slow
-      // paths. We want to use the STP and LDP instructions, which can only
-      // encode offsets that are multiples of the register size accessed.
-      first_register_slot_in_slow_path_ =
-          RoundUp(first_register_slot_in_slow_path_, vixl::kXRegSizeInBytes);
-    }
-#endif
     SetFrameSize(RoundUp(
-        first_register_slot_in_slow_path_
+        number_of_spill_slots * kVRegSize
+        + number_of_out_slots * kVRegSize
         + maximum_number_of_live_core_registers * GetWordSize()
         + maximum_number_of_live_fpu_registers * GetFloatingPointSpillSlotSize()
         + FrameEntrySpillSize(),

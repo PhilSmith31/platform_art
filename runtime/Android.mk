@@ -381,7 +381,7 @@ LIBOPENJDKJVM_SRC_FILES := openjdkjvm/OpenjdkJvm.cc
 
 LIBART_CFLAGS := -DBUILDING_LIBART=1
 
-LIBART_TARGET_CFLAGS := -O3
+LIBART_TARGET_CFLAGS :=
 LIBART_HOST_CFLAGS :=
 
 # Default dex2oat instruction set features.
@@ -389,7 +389,7 @@ LIBART_HOST_DEFAULT_INSTRUCTION_SET_FEATURES := default
 LIBART_TARGET_DEFAULT_INSTRUCTION_SET_FEATURES := default
 2ND_LIBART_TARGET_DEFAULT_INSTRUCTION_SET_FEATURES := default
 ifeq ($(DEX2OAT_TARGET_ARCH),arm)
-  ifneq (,$(filter $(DEX2OAT_TARGET_CPU_VARIANT),cortex-a15 krait kryo denver))
+  ifneq (,$(filter $(DEX2OAT_TARGET_CPU_VARIANT),cortex-a15 krait denver))
     LIBART_TARGET_DEFAULT_INSTRUCTION_SET_FEATURES := atomic_ldrd_strd,div
   else
     ifneq (,$(filter $(DEX2OAT_TARGET_CPU_VARIANT),cortex-a7))
@@ -398,7 +398,7 @@ ifeq ($(DEX2OAT_TARGET_ARCH),arm)
   endif
 endif
 ifeq ($(2ND_DEX2OAT_TARGET_ARCH),arm)
-  ifneq (,$(filter $(DEX2OAT_TARGET_CPU_VARIANT),cortex-a15 krait kryo denver))
+  ifneq (,$(filter $(DEX2OAT_TARGET_CPU_VARIANT),cortex-a15 krait denver))
     2ND_LIBART_TARGET_DEFAULT_INSTRUCTION_SET_FEATURES := atomic_ldrd_strd,div
   else
     ifneq (,$(filter $(DEX2OAT_TARGET_CPU_VARIANT),cortex-a7))
@@ -582,6 +582,11 @@ endif
   LOCAL_NATIVE_COVERAGE := $(ART_COVERAGE)
 
   ifeq ($$(art_target_or_host),target)
+    ifneq ($$(art_ndebug_or_debug),debug)
+      # Leave the symbols in the shared library so that stack unwinders can
+      # produce meaningful name resolution.
+      LOCAL_STRIP_MODULE := keep_symbols
+    endif
     include $$(BUILD_SHARED_LIBRARY)
   else # host
     ifeq ($$(art_static_or_shared),static)

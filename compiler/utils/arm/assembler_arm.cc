@@ -386,9 +386,8 @@ static dwarf::Reg DWARFReg(SRegister reg) {
 
 constexpr size_t kFramePointerSize = kArmPointerSize;
 
-void ArmAssembler::BuildFrame(size_t frame_size,
-                              ManagedRegister method_reg,
-                              ArrayRef<const ManagedRegister> callee_save_regs,
+void ArmAssembler::BuildFrame(size_t frame_size, ManagedRegister method_reg,
+                              const std::vector<ManagedRegister>& callee_save_regs,
                               const ManagedRegisterEntrySpills& entry_spills) {
   CHECK_EQ(buffer_.Size(), 0U);  // Nothing emitted yet
   CHECK_ALIGNED(frame_size, kStackAlignment);
@@ -443,7 +442,7 @@ void ArmAssembler::BuildFrame(size_t frame_size,
 }
 
 void ArmAssembler::RemoveFrame(size_t frame_size,
-                               ArrayRef<const ManagedRegister> callee_save_regs) {
+                              const std::vector<ManagedRegister>& callee_save_regs) {
   CHECK_ALIGNED(frame_size, kStackAlignment);
   cfi_.RememberState();
 
@@ -942,38 +941,6 @@ void ArmAssembler::FinalizeTrackedLabels() {
       last_label = label;
     }
   }
-}
-
-int32_t ArmAssembler::EncodeVRINTr(VRINTRoundingMode rm,
-                                   int output_register_code,
-                                   int input_register_code,
-                                   bool is_64bit) {
-  CHECK_NE(output_register_code, kNoSRegister);
-  CHECK_NE(input_register_code, kNoSRegister);
-  uint32_t D, M;
-  uint32_t Vd, Vm;
-  if (is_64bit) {
-    // Encoded as D:Vd and M:Vm.
-    D = (output_register_code >> 4) & 1;
-    Vd = output_register_code & 0xf;
-    M = (input_register_code >> 4) & 1;
-    Vm = input_register_code & 0xf;
-  } else {
-    // Encoded as Vd:D and Vm:M.
-    D = output_register_code & 1;
-    Vd = (output_register_code >> 1) & 0xf;
-    M = input_register_code & 1;
-    Vm = (input_register_code >> 1) & 0xf;
-  }
-  int32_t encoding = (static_cast<int32_t>(kSpecialCondition) << kConditionShift) |
-                     B27 | B26 | B25 | B23 |
-                     B21 | B20 | B19 |
-                     B11 | B9 | B6 |
-                     (rm * B16) |
-                     is_64bit * B8 |
-                     D * B22 | (Vd * B12) |
-                     M * B5 | (Vm * B0);
-  return encoding;
 }
 
 }  // namespace arm

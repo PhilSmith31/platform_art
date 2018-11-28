@@ -211,8 +211,6 @@ class CodeGenerator : public DeletableArenaObject<kArenaAllocCodeGenerator> {
                                 size_t maximum_number_of_live_fpu_registers,
                                 size_t number_of_out_slots,
                                 const ArenaVector<HBasicBlock*>& block_order);
-  // Backends can override this as necessary. For most, no special alignment is required.
-  virtual uint32_t GetPreferredSlotsAlignment() const { return 1; }
 
   uint32_t GetFrameSize() const { return frame_size_; }
   void SetFrameSize(uint32_t size) { frame_size_ = size; }
@@ -341,11 +339,6 @@ class CodeGenerator : public DeletableArenaObject<kArenaAllocCodeGenerator> {
   static size_t GetCacheOffset(uint32_t index);
   // Pointer variant for ArtMethod and ArtField arrays.
   size_t GetCachePointerOffset(uint32_t index);
-
-  // Helper that returns the offset of the array's length field.
-  // Note: Besides the normal arrays, we also use the HArrayLength for
-  // accessing the String's `count` field in String intrinsics.
-  static uint32_t GetArrayLengthOffset(HArrayLength* array_length);
 
   void EmitParallelMoves(Location from1,
                          Location to1,

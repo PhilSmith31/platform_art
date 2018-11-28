@@ -665,44 +665,16 @@ class ArmAssembler : public Assembler {
   virtual void vcvtsu(SRegister sd, SRegister sm, Condition cond = AL) = 0;
   virtual void vcvtdu(DRegister dd, SRegister sm, Condition cond = AL) = 0;
 
-  enum VRINTRoundingMode {
-    kVRINTA = 0,
-    kVRINTN = 1,
-    kVRINTP = 2,
-    kVRINTM = 3,
-  };
-
-  int32_t EncodeVRINTr(VRINTRoundingMode rm,
-                       int output_register_code,
-                       int input_register_code,
-                       bool is_64bit);
-
-  virtual void vrints(VRINTRoundingMode rm, SRegister sd, SRegister sm) = 0;
-  virtual void vrintd(VRINTRoundingMode rm, DRegister dd, DRegister dm) = 0;
-  void vrintsa(SRegister sd, SRegister sm) { vrints(kVRINTA, sd, sm); }
-  void vrintda(DRegister dd, DRegister dm) { vrintd(kVRINTA, dd, dm); }
-  void vrintsn(SRegister sd, SRegister sm) { vrints(kVRINTN, sd, sm); }
-  void vrintdn(DRegister dd, DRegister dm) { vrintd(kVRINTN, dd, dm); }
-  void vrintsp(SRegister sd, SRegister sm) { vrints(kVRINTP, sd, sm); }
-  void vrintdp(DRegister dd, DRegister dm) { vrintd(kVRINTP, dd, dm); }
-  void vrintsm(SRegister sd, SRegister sm) { vrints(kVRINTM, sd, sm); }
-  void vrintdm(DRegister dd, DRegister dm) { vrintd(kVRINTM, dd, dm); }
-
   virtual void vcmps(SRegister sd, SRegister sm, Condition cond = AL) = 0;
   virtual void vcmpd(DRegister dd, DRegister dm, Condition cond = AL) = 0;
   virtual void vcmpsz(SRegister sd, Condition cond = AL) = 0;
   virtual void vcmpdz(DRegister dd, Condition cond = AL) = 0;
   virtual void vmstat(Condition cond = AL) = 0;  // VMRS APSR_nzcv, FPSCR
 
-  virtual void vcntd(DRegister dd, DRegister dm) = 0;
-  virtual void vpaddld(DRegister dd, DRegister dm, int32_t size, bool is_unsigned) = 0;
-
   virtual void vpushs(SRegister reg, int nregs, Condition cond = AL) = 0;
   virtual void vpushd(DRegister reg, int nregs, Condition cond = AL) = 0;
   virtual void vpops(SRegister reg, int nregs, Condition cond = AL) = 0;
   virtual void vpopd(DRegister reg, int nregs, Condition cond = AL) = 0;
-  virtual void vldmiad(Register base_reg, DRegister reg, int nregs, Condition cond = AL) = 0;
-  virtual void vstmiad(Register base_reg, DRegister reg, int nregs, Condition cond = AL) = 0;
 
   // Branch instructions.
   virtual void b(Label* label, Condition cond = AL) = 0;
@@ -779,7 +751,32 @@ class ArmAssembler : public Assembler {
     }
   }
 
-  virtual void LoadDImmediate(DRegister dd, double value, Condition cond = AL) = 0;
+  void LoadDImmediate(DRegister sd, double value, Condition cond = AL) {
+    if (!vmovd(sd, value, cond)) {
+      uint64_t int_value = bit_cast<uint64_t, double>(value);
+      if (int_value == bit_cast<uint64_t, double>(0.0)) {
+        // 0.0 is quite common, so we special case it by loading
+        // 2.0 in `sd` and then substracting it.
+        bool success = vmovd(sd, 2.0, cond);
+        CHECK(success);
+        vsubd(sd, sd, sd, cond);
+      } else {
+        if (sd < 16) {
+          SRegister low = static_cast<SRegister>(sd << 1);
+          SRegister high = static_cast<SRegister>(low + 1);
+          LoadSImmediate(low, bit_cast<float, uint32_t>(Low32Bits(int_value)), cond);
+          if (High32Bits(int_value) == Low32Bits(int_value)) {
+            vmovs(high, low);
+          } else {
+            LoadSImmediate(high, bit_cast<float, uint32_t>(High32Bits(int_value)), cond);
+          }
+        } else {
+          LOG(FATAL) << "Unimplemented loading of double into a D register "
+                     << "that cannot be split into two S registers";
+        }
+      }
+    }
+  }
 
   virtual void MarkExceptionHandler(Label* label) = 0;
   virtual void LoadFromOffset(LoadOperandType type,
@@ -910,13 +907,12 @@ class ArmAssembler : public Assembler {
   //
 
   // Emit code that will create an activation on the stack
-  void BuildFrame(size_t frame_size,
-                  ManagedRegister method_reg,
-                  ArrayRef<const ManagedRegister> callee_save_regs,
+  void BuildFrame(size_t frame_size, ManagedRegister method_reg,
+                  const std::vector<ManagedRegister>& callee_save_regs,
                   const ManagedRegisterEntrySpills& entry_spills) OVERRIDE;
 
   // Emit code that will remove an activation from the stack
-  void RemoveFrame(size_t frame_size, ArrayRef<const ManagedRegister> callee_save_regs)
+  void RemoveFrame(size_t frame_size, const std::vector<ManagedRegister>& callee_save_regs)
     OVERRIDE;
 
   void IncreaseFrameSize(size_t adjust) OVERRIDE;

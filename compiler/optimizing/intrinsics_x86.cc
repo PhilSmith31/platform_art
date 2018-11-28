@@ -60,6 +60,19 @@ bool IntrinsicLocationsBuilderX86::TryDispatch(HInvoke* invoke) {
   if (res == nullptr) {
     return false;
   }
+  if (kEmitCompilerReadBarrier && res->CanCall()) {
+    // Generating an intrinsic for this HInvoke may produce an
+    // IntrinsicSlowPathX86 slow path.  Currently this approach
+    // does not work when using read barriers, as the emitted
+    // calling sequence will make use of another slow path
+    // (ReadBarrierForRootSlowPathX86 for HInvokeStaticOrDirect,
+    // ReadBarrierSlowPathX86 for HInvokeVirtual).  So we bail
+    // out in this case.
+    //
+    // TODO: Find a way to have intrinsics work with read barriers.
+    invoke->SetLocations(nullptr);
+    return false;
+  }
   return res->Intrinsified();
 }
 
@@ -1306,11 +1319,11 @@ void IntrinsicCodeGeneratorX86::VisitStringEquals(HInvoke* invoke) {
     __ j(kEqual, &return_false);
   }
 
+  // Instanceof check for the argument by comparing class fields.
+  // All string objects must have the same type since String cannot be subclassed.
+  // Receiver must be a string object, so its class field is equal to all strings' class fields.
+  // If the argument is a string object, its class field must be equal to receiver's class field.
   if (!optimizations.GetArgumentIsString()) {
-    // Instanceof check for the argument by comparing class fields.
-    // All string objects must have the same type since String cannot be subclassed.
-    // Receiver must be a string object, so its class field is equal to all strings' class fields.
-    // If the argument is a string object, its class field must be equal to receiver's class field.
     __ movl(ecx, Address(str, class_offset));
     __ cmpl(ecx, Address(arg, class_offset));
     __ j(kNotEqual, &return_false);
@@ -1405,11 +1418,10 @@ static void GenerateStringIndexOf(HInvoke* invoke,
   DCHECK_EQ(out, EDI);
 
   // Check for code points > 0xFFFF. Either a slow-path check when we don't know statically,
-  // or directly dispatch for a large constant, or omit slow-path for a small constant or a char.
+  // or directly dispatch if we have a constant.
   SlowPathCode* slow_path = nullptr;
-  HInstruction* code_point = invoke->InputAt(1);
-  if (code_point->IsIntConstant()) {
-    if (static_cast<uint32_t>(code_point->AsIntConstant()->GetValue()) >
+  if (invoke->InputAt(1)->IsIntConstant()) {
+    if (static_cast<uint32_t>(invoke->InputAt(1)->AsIntConstant()->GetValue()) >
     std::numeric_limits<uint16_t>::max()) {
       // Always needs the slow-path. We could directly dispatch to it, but this case should be
       // rare, so for simplicity just put the full slow-path down and branch unconditionally.
@@ -1419,7 +1431,7 @@ static void GenerateStringIndexOf(HInvoke* invoke,
       __ Bind(slow_path->GetExitLabel());
       return;
     }
-  } else if (code_point->GetType() != Primitive::kPrimChar) {
+  } else {
     __ cmpl(search_value, Immediate(std::numeric_limits<uint16_t>::max()));
     slow_path = new (allocator) IntrinsicSlowPathX86(invoke);
     codegen->AddSlowPath(slow_path);
@@ -1907,13 +1919,12 @@ static void CreateIntIntIntToIntLocations(ArenaAllocator* arena,
     if (is_volatile) {
       // Need to use XMM to read volatile.
       locations->AddTemp(Location::RequiresFpuRegister());
-      locations->SetOut(Location::RequiresRegister(), Location::kNoOutputOverlap);
+      locations->SetOut(Location::RequiresRegister());
     } else {
       locations->SetOut(Location::RequiresRegister(), Location::kOutputOverlap);
     }
   } else {
-    locations->SetOut(Location::RequiresRegister(),
-                      can_call ? Location::kOutputOverlap : Location::kNoOutputOverlap);
+    locations->SetOut(Location::RequiresRegister());
   }
   if (type == Primitive::kPrimNot && kEmitCompilerReadBarrier && kUseBakerReadBarrier) {
     // We need a temporary register for the read barrier marking slow
@@ -2139,9 +2150,9 @@ void IntrinsicLocationsBuilderX86::VisitUnsafeCASObject(HInvoke* invoke) {
   // The UnsafeCASObject intrinsic is missing a read barrier, and
   // therefore sometimes does not work as expected (b/25883050).
   // Turn it off temporarily as a quick fix, until the read barrier is
-  // implemented (see TODO in GenCAS).
+  // implemented.
   //
-  // TODO(rpl): Implement read barrier support in GenCAS and re-enable
+  // TODO(rpl): Implement a read barrier in GenCAS below and re-enable
   // this intrinsic.
   if (kEmitCompilerReadBarrier) {
     return;
@@ -2266,15 +2277,6 @@ void IntrinsicCodeGeneratorX86::VisitUnsafeCASLong(HInvoke* invoke) {
 }
 
 void IntrinsicCodeGeneratorX86::VisitUnsafeCASObject(HInvoke* invoke) {
-  // The UnsafeCASObject intrinsic is missing a read barrier, and
-  // therefore sometimes does not work as expected (b/25883050).
-  // Turn it off temporarily as a quick fix, until the read barrier is
-  // implemented (see TODO in GenCAS).
-  //
-  // TODO(rpl): Implement read barrier support in GenCAS and re-enable
-  // this intrinsic.
-  DCHECK(!kEmitCompilerReadBarrier);
-
   GenCAS(Primitive::kPrimNot, invoke, codegen_);
 }
 

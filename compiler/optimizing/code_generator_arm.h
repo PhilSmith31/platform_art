@@ -179,10 +179,9 @@ class LocationsBuilderARM : public HGraphVisitor {
   void HandleFieldSet(HInstruction* instruction, const FieldInfo& field_info);
   void HandleFieldGet(HInstruction* instruction, const FieldInfo& field_info);
 
-  Location ArithmeticZeroOrFpuRegister(HInstruction* input);
   Location ArmEncodableConstantOrRegister(HInstruction* constant, Opcode opcode);
   bool CanEncodeConstantAsImmediate(HConstant* input_cst, Opcode opcode);
-  bool CanEncodeConstantAsImmediate(uint32_t value, Opcode opcode, SetCc set_cc = kCcDontCare);
+  bool CanEncodeConstantAsImmediate(uint32_t value, Opcode opcode);
 
   CodeGeneratorARM* const codegen_;
   InvokeDexCallingConventionVisitorARM parameter_visitor_;
@@ -219,7 +218,6 @@ class InstructionCodeGeneratorARM : public InstructionCodeGenerator {
   void GenerateAndConst(Register out, Register first, uint32_t value);
   void GenerateOrrConst(Register out, Register first, uint32_t value);
   void GenerateEorConst(Register out, Register first, uint32_t value);
-  void GenerateAddLongConst(Location out, Location first, uint64_t value);
   void HandleBitwiseOperation(HBinaryOperation* operation);
   void HandleCondition(HCondition* condition);
   void HandleIntegerRotate(LocationSummary* locations);
@@ -282,7 +280,6 @@ class InstructionCodeGeneratorARM : public InstructionCodeGenerator {
   void GenerateCompareTestAndBranch(HCondition* condition,
                                     Label* true_target,
                                     Label* false_target);
-  void GenerateVcmp(HInstruction* instruction);
   void GenerateFPJumps(HCondition* cond, Label* true_label, Label* false_label);
   void GenerateLongComparesAndJumps(HCondition* cond, Label* true_label, Label* false_label);
   void DivRemOneOrMinusOne(HBinaryOperation* instruction);
@@ -467,16 +464,6 @@ class CodeGeneratorARM : public CodeGenerator {
                                              Location index,
                                              Location temp,
                                              bool needs_null_check);
-  // Factored implementation used by GenerateFieldLoadWithBakerReadBarrier
-  // and GenerateArrayLoadWithBakerReadBarrier.
-  void GenerateReferenceLoadWithBakerReadBarrier(HInstruction* instruction,
-                                                 Location ref,
-                                                 Register obj,
-                                                 uint32_t offset,
-                                                 Location index,
-                                                 ScaleFactor scale_factor,
-                                                 Location temp,
-                                                 bool needs_null_check);
 
   // Generate a read barrier for a heap reference within `instruction`
   // using a slow path.
@@ -532,6 +519,16 @@ class CodeGeneratorARM : public CodeGenerator {
   void GenerateExplicitNullCheck(HNullCheck* instruction);
 
  private:
+  // Factored implementation of GenerateFieldLoadWithBakerReadBarrier
+  // and GenerateArrayLoadWithBakerReadBarrier.
+  void GenerateReferenceLoadWithBakerReadBarrier(HInstruction* instruction,
+                                                 Location ref,
+                                                 Register obj,
+                                                 uint32_t offset,
+                                                 Location index,
+                                                 Location temp,
+                                                 bool needs_null_check);
+
   Register GetInvokeStaticOrDirectExtraParameter(HInvokeStaticOrDirect* invoke, Register temp);
 
   using Uint32ToLiteralMap = ArenaSafeMap<uint32_t, Literal*>;

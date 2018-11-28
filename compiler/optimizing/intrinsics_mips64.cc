@@ -1477,12 +1477,11 @@ static void GenerateStringIndexOf(HInvoke* invoke,
   // Note that the null check must have been done earlier.
   DCHECK(!invoke->CanDoImplicitNullCheckOn(invoke->InputAt(0)));
 
-  // Check for code points > 0xFFFF. Either a slow-path check when we don't know statically,
-  // or directly dispatch for a large constant, or omit slow-path for a small constant or a char.
+  // Check for code points > 0xFFFF. Either a slow-path check when we
+  // don't know statically, or directly dispatch if we have a constant.
   SlowPathCodeMIPS64* slow_path = nullptr;
-  HInstruction* code_point = invoke->InputAt(1);
-  if (code_point->IsIntConstant()) {
-    if (!IsUint<16>(code_point->AsIntConstant()->GetValue())) {
+  if (invoke->InputAt(1)->IsIntConstant()) {
+    if (!IsUint<16>(invoke->InputAt(1)->AsIntConstant()->GetValue())) {
       // Always needs the slow-path. We could directly dispatch to it,
       // but this case should be rare, so for simplicity just put the
       // full slow-path down and branch unconditionally.
@@ -1492,7 +1491,7 @@ static void GenerateStringIndexOf(HInvoke* invoke,
       __ Bind(slow_path->GetExitLabel());
       return;
     }
-  } else if (code_point->GetType() != Primitive::kPrimChar) {
+  } else {
     GpuRegister char_reg = locations->InAt(1).AsRegister<GpuRegister>();
     __ LoadConst32(tmp_reg, std::numeric_limits<uint16_t>::max());
     slow_path = new (allocator) IntrinsicSlowPathMIPS64(invoke);
